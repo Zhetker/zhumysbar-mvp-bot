@@ -1,62 +1,37 @@
-import asyncio
+import os
 import logging
 from aiogram import Bot, Dispatcher, types
-from rapidfuzz import fuzz
+from aiogram.utils import executor
+from dotenv import load_dotenv
 
+# Загружаем переменные из .env
+load_dotenv()
+API_TOKEN = os.getenv("API_TOKEN")
+
+if not API_TOKEN:
+    raise ValueError("❌ Токен бота не найден! Добавь его в .env или переменные окружения.")
+
+# Логирование
 logging.basicConfig(level=logging.INFO)
-
-API_TOKEN = "6098697507:AAE8dXizz_MviFeRwDnyEEFMNNbS1zgUSgE"
-CHANNEL_ID = "@zhumys_bar"  # 🔹 замени на username или ID своего канала
+logging.info("🚀 Бот запускается...")
 
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(bot)
 
-# Список ключевых полей вакансии
-FIELDS = ["грузчик", "нужен", "требуется", "работа", "склад", "фабрика", "стройка"]
-TEMPLATE_HINT = (
-    "⚠️ Пожалуйста, оформите вакансию по шаблону:\n\n"
-    "📍 Кто нужен\n📅 Когда\n🕗 Время\n💰 Оплата\n📞 Контакт"
-)
+# Ключевые слова для проверки вакансий
+KEYWORDS = ["вакансия", "нужен", "требуется", "работа", "грузчик", "склад", "фабрика", "стройка"]
 
-def check_vacancy(text: str) -> bool:
-    text = text.lower()
+@dp.message_handler(content_types=types.ContentType.TEXT)
+async def check_message(message: types.Message):
+    text = message.text.lower()
 
-    # 🔹 1. Проверка на ключевые слова (с опечатками)
-    for word in FIELDS:
-        if fuzz.partial_ratio(word, text) > 80:
-            return True
-
-    # 🔹 2. Проверка на шаблон
-    has_person = any(x in text for x in ["грузчик", "водитель", "менеджер", "уборщ"])
-    has_date = any(x in text for x in ["сегодня", "завтра", "понедельник", "вторник", "числа"])
-    has_time = any(char.isdigit() and ":" in text or "утра" in text or "вечера" in text for char in text)
-    has_money = any(x in text for x in ["тг", "₸", "тенге", "сом", "руб", "₽", "usd", "$"])
-    has_contact = any(x in text for x in ["870", "+7", "тел", "whatsapp", "ватсап", "tg", "@"])
-
-    checks = [has_person, has_date, has_time, has_money, has_contact]
-    return sum(checks) >= 4
-
-@dp.message()
-async def process_message(message: types.Message):
-    text = message.text or ""
-    logging.info(f"Получено сообщение: {text}")
-
-    if check_vacancy(text):
+    if any(word in text for word in KEYWORDS):
         await message.reply("✅ Ваша вакансия принята. Спасибо!")
-
-        # 🔹 Пересылаем вакансию в канал
-        try:
-            await bot.send_message(CHANNEL_ID, f"📢 Новая вакансия:\n\n{text}")
-            logging.info("Вакансия отправлена в канал")
-        except Exception as e:
-            logging.error(f"Ошибка при пересылке в канал: {e}")
-
     else:
-        await message.reply(TEMPLATE_HINT)
-
-async def main():
-    logging.info("🚀 Бот запускается...")
-    await dp.start_polling(bot)
+        await message.reply(
+            "⚠️ Пожалуйста, оформите вакансию по шаблону:\n\n"
+            "📍 Кто нужен\n📅 Когда\n🕗 Время\n💰 Оплата\n📞 Контакт"
+        )
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    executor.start_polling(dp, skip_updates=True)
